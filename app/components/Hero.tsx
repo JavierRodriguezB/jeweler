@@ -110,12 +110,12 @@ export default function Hero() {
         <div className="grid w-full max-w-7xl items-center gap-16 lg:grid-cols-[1.1fr_0.9fr]">
           <div>
             <h1 className="font-display text-[clamp(3rem,8vw,6.5rem)] leading-[0.95] text-ink">
-              <span className="block overflow-hidden">
+              <span className="-mb-[0.2em] block overflow-hidden pb-[0.2em]">
                 <span data-headline-word className="block">
                   Joyas que
                 </span>
               </span>
-              <span className="block overflow-hidden">
+              <span className="-mb-[0.2em] block overflow-hidden pb-[0.2em]">
                 <span
                   data-headline-word
                   className="block italic text-rose-deep"

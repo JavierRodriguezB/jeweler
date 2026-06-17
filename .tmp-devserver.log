@@ -1,0 +1,11 @@
+
+> jeweler@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.9 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.33:3000
+✓ Ready in 421ms
+
+ GET / 200 in 612ms (next.js: 452ms, application-code: 160ms)
+ GET / 200 in 84ms (next.js: 7ms, application-code: 78ms)
