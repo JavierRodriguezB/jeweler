@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
+  // Permite el HMR (hot reload) cuando se accede por un túnel de Cloudflare.
+  // Las quick tunnels usan un subdominio aleatorio de trycloudflare.com.
+  allowedDevOrigins: ["*.trycloudflare.com"],
   turbopack: {
     root: path.join(__dirname),
   },

@@ -8,23 +8,22 @@ import {
   useMemo,
   useState,
 } from "react";
-import type { Category, Product } from "../../lib/types";
-import { mockCategories, mockProducts } from "../../lib/mock-data";
+import type {
+  Category,
+  Product,
+  ProductDetailBlock,
+  ProductImage,
+  ProductVariant,
+} from "../../lib/types";
+import { createClient } from "../../lib/supabase/client";
 
-const STORAGE_KEY = "cocolu-catalog";
-
-type CatalogData = { categories: Category[]; products: Product[] };
-
-type DeleteResult = { ok: true } | { ok: false; error: string };
+type MutationResult = { ok: true } | { ok: false; error: string };
 
 type CatalogContextValue = {
-  /** true cuando ya se leyó el catálogo de localStorage. */
+  /** true cuando ya se cargó el catálogo desde Supabase. */
   hydrated: boolean;
-  /** Categorías ordenadas por `order`. */
   categories: Category[];
-  /** Todos los productos (para administración). */
   products: Product[];
-  /** Solo productos activos (para el escaparate). */
   activeProducts: Product[];
   getCategoryBySlug: (slug: string) => Category | undefined;
   getCategoryById: (id: string) => Category | undefined;
@@ -32,144 +31,335 @@ type CatalogContextValue = {
   getProductById: (id: string) => Product | undefined;
   getActiveProductsByCategory: (categoryId: string) => Product[];
   countActiveByCategory: (categoryId: string) => number;
-  upsertCategory: (category: Category) => void;
-  deleteCategory: (id: string) => DeleteResult;
-  upsertProduct: (product: Product) => void;
-  deleteProduct: (id: string) => void;
-  resetCatalog: () => void;
+  upsertCategory: (category: Category) => Promise<MutationResult>;
+  deleteCategory: (id: string) => Promise<MutationResult>;
+  upsertProduct: (product: Product) => Promise<MutationResult>;
+  deleteProduct: (id: string) => Promise<MutationResult>;
+  refresh: () => Promise<void>;
 };
 
 const CatalogContext = createContext<CatalogContextValue | null>(null);
 
-/** Clona el mock para no mutar los imports al editar. */
-function seed(): CatalogData {
+// ──────────────────────── Filas de la BD (sin tipos generados) ──────────────
+
+type DbCategory = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  accent: string | null;
+  sort_order: number;
+  featured: boolean;
+};
+
+type DbImage = {
+  id: string;
+  url: string;
+  alt: string | null;
+  is_primary: boolean;
+  position: number;
+};
+
+type DbVariant = {
+  id: string;
+  type: ProductVariant["type"];
+  label: string;
+  value: string;
+  available: boolean;
+  stock: number;
+};
+
+type DbProduct = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  price: number | string;
+  compare_at_price: number | string | null;
+  category_id: string;
+  season: Product["season"];
+  status: Product["status"];
+  stock: number;
+  sku: string | null;
+  rating: number | string;
+  review_count: number;
+  is_new: boolean;
+  is_on_sale: boolean;
+  details: ProductDetailBlock[] | null;
+  tags: string[] | null;
+  created_at: string;
+  product_images: DbImage[] | null;
+  product_variants: DbVariant[] | null;
+};
+
+// ───────────────────────────────── Mappers ─────────────────────────────────
+
+function mapCategory(row: DbCategory): Category {
   return {
-    categories: JSON.parse(JSON.stringify(mockCategories)) as Category[],
-    products: JSON.parse(JSON.stringify(mockProducts)) as Product[],
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    description: row.description ?? "",
+    image: "",
+    productCount: 0,
+    featured: row.featured,
+    order: row.sort_order,
+    accent: row.accent ?? undefined,
+  };
+}
+
+function mapProduct(row: DbProduct): Product {
+  const images: ProductImage[] = (row.product_images ?? [])
+    .slice()
+    .sort((a, b) => a.position - b.position)
+    .map((im) => ({
+      id: im.id,
+      url: im.url,
+      alt: im.alt ?? "",
+      isPrimary: im.is_primary,
+    }));
+
+  const variants: ProductVariant[] = (row.product_variants ?? []).map((v) => ({
+    id: v.id,
+    type: v.type,
+    label: v.label,
+    value: v.value,
+    available: v.available,
+    stock: v.stock,
+  }));
+
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    description: row.description ?? "",
+    price: Number(row.price),
+    compareAtPrice:
+      row.compare_at_price == null ? undefined : Number(row.compare_at_price),
+    categoryId: row.category_id,
+    season: row.season,
+    images,
+    variants,
+    details: row.details ?? [],
+    rating: Number(row.rating),
+    reviewCount: row.review_count,
+    stock: row.stock,
+    sku: row.sku ?? "",
+    status: row.status,
+    isNew: row.is_new,
+    isOnSale: row.is_on_sale,
+    tags: row.tags ?? [],
+    createdAt: row.created_at,
+  };
+}
+
+/** Payload de producto para la BD (sin id; lo asigna Postgres en insert). */
+function productRow(p: Product) {
+  return {
+    slug: p.slug,
+    name: p.name,
+    description: p.description,
+    price: p.price,
+    compare_at_price: p.compareAtPrice ?? null,
+    category_id: p.categoryId,
+    season: p.season,
+    status: p.status,
+    stock: p.stock,
+    sku: p.sku || null,
+    rating: p.rating,
+    review_count: p.reviewCount,
+    is_new: p.isNew,
+    is_on_sale: p.isOnSale,
+    details: p.details,
+    tags: p.tags,
   };
 }
 
 export function CatalogProvider({ children }: { children: React.ReactNode }) {
-  // El estado inicial es el seed → el render del servidor y el primer render
-  // del cliente coinciden (sin desajuste de hidratación).
-  const [data, setData] = useState<CatalogData>(seed);
+  const [supabase] = useState(() => createClient());
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setData(JSON.parse(raw) as CatalogData);
-    } catch {
-      /* almacenamiento no disponible */
-    }
-    setHydrated(true);
-  }, []);
+  const refresh = useCallback(async () => {
+    const [catRes, prodRes] = await Promise.all([
+      supabase.from("categories").select("*").order("sort_order"),
+      supabase
+        .from("products")
+        .select("*, product_images(*), product_variants(*)")
+        .order("created_at", { ascending: false }),
+    ]);
+
+    if (catRes.data)
+      setCategories((catRes.data as DbCategory[]).map(mapCategory));
+    if (prodRes.data)
+      setProducts((prodRes.data as unknown as DbProduct[]).map(mapProduct));
+  }, [supabase]);
 
   useEffect(() => {
-    if (!hydrated) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    } catch {
-      /* almacenamiento no disponible */
-    }
-  }, [data, hydrated]);
+    refresh().finally(() => setHydrated(true));
+  }, [refresh]);
 
-  const categories = useMemo(
-    () => [...data.categories].sort((a, b) => a.order - b.order),
-    [data.categories]
-  );
   const activeProducts = useMemo(
-    () => data.products.filter((p) => p.status === "active"),
-    [data.products]
+    () => products.filter((p) => p.status === "active"),
+    [products]
   );
 
   const getCategoryBySlug = useCallback(
-    (slug: string) => data.categories.find((c) => c.slug === slug),
-    [data.categories]
+    (slug: string) => categories.find((c) => c.slug === slug),
+    [categories]
   );
   const getCategoryById = useCallback(
-    (id: string) => data.categories.find((c) => c.id === id),
-    [data.categories]
+    (id: string) => categories.find((c) => c.id === id),
+    [categories]
   );
   const getProductBySlug = useCallback(
-    (slug: string) => data.products.find((p) => p.slug === slug),
-    [data.products]
+    (slug: string) => products.find((p) => p.slug === slug),
+    [products]
   );
   const getProductById = useCallback(
-    (id: string) => data.products.find((p) => p.id === id),
-    [data.products]
+    (id: string) => products.find((p) => p.id === id),
+    [products]
   );
   const getActiveProductsByCategory = useCallback(
     (categoryId: string) =>
-      data.products.filter(
-        (p) => p.categoryId === categoryId && p.status === "active"
-      ),
-    [data.products]
+      products.filter((p) => p.categoryId === categoryId && p.status === "active"),
+    [products]
   );
   const countActiveByCategory = useCallback(
     (categoryId: string) =>
-      data.products.filter(
-        (p) => p.categoryId === categoryId && p.status === "active"
-      ).length,
-    [data.products]
+      products.filter((p) => p.categoryId === categoryId && p.status === "active")
+        .length,
+    [products]
   );
 
-  const upsertCategory = useCallback((category: Category) => {
-    setData((prev) => {
-      const exists = prev.categories.some((c) => c.id === category.id);
-      return {
-        ...prev,
-        categories: exists
-          ? prev.categories.map((c) => (c.id === category.id ? category : c))
-          : [...prev.categories, category],
-      };
-    });
-  }, []);
+  // ──────────────────────────── Mutaciones (admin) ─────────────────────────
 
-  const deleteCategory = useCallback(
-    (id: string): DeleteResult => {
-      const hasProducts = data.products.some((p) => p.categoryId === id);
-      if (hasProducts) {
-        return {
-          ok: false,
-          error: "No se puede eliminar: la categoría tiene productos.",
-        };
-      }
-      setData((prev) => ({
-        ...prev,
-        categories: prev.categories.filter((c) => c.id !== id),
-      }));
+  const exists = useCallback(
+    (id: string, list: { id: string }[]) => list.some((x) => x.id === id),
+    []
+  );
+
+  const upsertCategory = useCallback(
+    async (category: Category): Promise<MutationResult> => {
+      const payload = {
+        slug: category.slug,
+        name: category.name,
+        description: category.description,
+        accent: category.accent ?? null,
+        sort_order: category.order,
+        featured: category.featured,
+      };
+
+      const isUpdate = exists(category.id, categories);
+      const { error } = isUpdate
+        ? await supabase.from("categories").update(payload).eq("id", category.id)
+        : await supabase.from("categories").insert(payload);
+
+      if (error) return { ok: false, error: error.message };
+      await refresh();
       return { ok: true };
     },
-    [data.products]
+    [supabase, categories, exists, refresh]
   );
 
-  const upsertProduct = useCallback((product: Product) => {
-    setData((prev) => {
-      const exists = prev.products.some((p) => p.id === product.id);
-      return {
-        ...prev,
-        products: exists
-          ? prev.products.map((p) => (p.id === product.id ? product : p))
-          : [...prev.products, product],
-      };
-    });
-  }, []);
+  const deleteCategory = useCallback(
+    async (id: string): Promise<MutationResult> => {
+      const { error } = await supabase.from("categories").delete().eq("id", id);
+      if (error) {
+        // FK on delete restrict → la categoría tiene productos.
+        return {
+          ok: false,
+          error:
+            "No se puede eliminar: la categoría tiene productos asociados.",
+        };
+      }
+      await refresh();
+      return { ok: true };
+    },
+    [supabase, refresh]
+  );
 
-  const deleteProduct = useCallback((id: string) => {
-    setData((prev) => ({
-      ...prev,
-      products: prev.products.filter((p) => p.id !== id),
-    }));
-  }, []);
+  /** Reemplaza imágenes y variantes de un producto por las del formulario. */
+  const syncChildren = useCallback(
+    async (productId: string, product: Product) => {
+      await supabase.from("product_images").delete().eq("product_id", productId);
+      await supabase
+        .from("product_variants")
+        .delete()
+        .eq("product_id", productId);
 
-  const resetCatalog = useCallback(() => setData(seed()), []);
+      if (product.images.length > 0) {
+        await supabase.from("product_images").insert(
+          product.images.map((im, i) => ({
+            product_id: productId,
+            url: im.url,
+            alt: im.alt,
+            is_primary: im.isPrimary,
+            position: i,
+          }))
+        );
+      }
+      if (product.variants.length > 0) {
+        await supabase.from("product_variants").insert(
+          product.variants.map((v) => ({
+            product_id: productId,
+            type: v.type,
+            label: v.label,
+            value: v.value,
+            available: v.available,
+            stock: v.stock,
+          }))
+        );
+      }
+    },
+    [supabase]
+  );
+
+  const upsertProduct = useCallback(
+    async (product: Product): Promise<MutationResult> => {
+      const isUpdate = exists(product.id, products);
+
+      if (isUpdate) {
+        const { error } = await supabase
+          .from("products")
+          .update(productRow(product))
+          .eq("id", product.id);
+        if (error) return { ok: false, error: error.message };
+        await syncChildren(product.id, product);
+      } else {
+        const { data, error } = await supabase
+          .from("products")
+          .insert(productRow(product))
+          .select("id")
+          .single();
+        if (error || !data) {
+          return { ok: false, error: error?.message ?? "No se pudo crear." };
+        }
+        await syncChildren((data as { id: string }).id, product);
+      }
+
+      await refresh();
+      return { ok: true };
+    },
+    [supabase, products, exists, syncChildren, refresh]
+  );
+
+  const deleteProduct = useCallback(
+    async (id: string): Promise<MutationResult> => {
+      const { error } = await supabase.from("products").delete().eq("id", id);
+      if (error) return { ok: false, error: error.message };
+      await refresh();
+      return { ok: true };
+    },
+    [supabase, refresh]
+  );
 
   const value = useMemo<CatalogContextValue>(
     () => ({
       hydrated,
       categories,
-      products: data.products,
+      products,
       activeProducts,
       getCategoryBySlug,
       getCategoryById,
@@ -181,12 +371,12 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
       deleteCategory,
       upsertProduct,
       deleteProduct,
-      resetCatalog,
+      refresh,
     }),
     [
       hydrated,
       categories,
-      data.products,
+      products,
       activeProducts,
       getCategoryBySlug,
       getCategoryById,
@@ -198,7 +388,7 @@ export function CatalogProvider({ children }: { children: React.ReactNode }) {
       deleteCategory,
       upsertProduct,
       deleteProduct,
-      resetCatalog,
+      refresh,
     ]
   );
 

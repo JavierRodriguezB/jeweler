@@ -3,15 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useCatalog } from "../../components/catalog/CatalogContext";
-import { getStoredOrders } from "../../components/account/ordersStore";
-import { mockOrders } from "../../lib/mock-data";
+import { countOrders } from "../../lib/supabase/orders";
 
 export default function AdminDashboard() {
   const { categories, products, activeProducts } = useCatalog();
   const [orderCount, setOrderCount] = useState(0);
 
   useEffect(() => {
-    setOrderCount(getStoredOrders().length + mockOrders.length);
+    countOrders().then(setOrderCount);
   }, []);
 
   const stats = [

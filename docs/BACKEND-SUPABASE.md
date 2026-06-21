@@ -15,7 +15,7 @@ en [ARQUITECTURA.md](./ARQUITECTURA.md).
 | --- | --- |
 | `CatalogContext` (localStorage) | Tablas `categories`, `products`, `product_images`, `product_variants` |
 | `AuthContext` (localStorage) | Supabase Auth (sesión por cookies) |
-| `ordersStore` (localStorage) | Tablas `orders`, `order_items` |
+| `lib/supabase/orders.ts` | Tablas `orders`, `order_items` |
 | Rutas de imagen placeholder | Supabase Storage (`product-images`) |
 | Guard de rol solo en cliente | RLS en BD + verificación en Server Actions |
 
@@ -25,12 +25,13 @@ del admin van por **Server Actions** con verificación de rol y `revalidatePath`
 
 ## 2. Variables de entorno
 
-`.env.local` (no se commitea; ver [`.env.example`](../.env.example)):
+`.env` (no se commitea; ver [`.env.example`](../.env.example)). Supabase usa las
+**llaves nuevas**: `publishable` (pública) y `secret` (privada):
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
-SUPABASE_SERVICE_ROLE_KEY=<service-role-key>   # SOLO servidor, nunca al cliente
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_...   # pública (navegador)
+SUPABASE_SECRET_KEY=sb_secret_...                         # SOLO servidor
 ```
 
 ## 3. Esquema de datos
@@ -95,6 +96,42 @@ mock. El trigger crea el `profile` con rol `customer`.
 5. Route Handler `app/auth/callback/route.ts` que canjea el código:
    `supabase.auth.exchangeCodeForSession(code)` y redirige.
 
+### Redirect URLs y URLs cambiantes (túneles / `trycloudflare`, ngrok, previews)
+
+El botón construye el destino con `${window.location.origin}/auth/callback`, así
+que **el dominio desde el que abres la app forma parte del flujo OAuth**. Supabase
+solo redirige de vuelta a URLs que estén en su lista blanca; si no coinciden, usa
+el *Site URL* como fallback y te quedas **sin sesión** en el dominio actual.
+
+**Dónde se configura** — Supabase Dashboard → Authentication → **URL Configuration**:
+
+- **Site URL**: destino por defecto cuando ninguna redirect coincide. No admite
+  comodines. En desarrollo: `http://localhost:3000`.
+- **Redirect URLs** (lista blanca, **sí** admite comodines): añade una entrada por
+  cada origen desde el que pruebes, terminada en `/auth/callback`.
+
+Los túneles tipo `trycloudflare.com` (modo *quick*) generan una **URL nueva en
+cada reinicio**, lo que rompe el login una y otra vez. Para no editar la lista
+cada vez, usa un **comodín**:
+
+```
+https://*.trycloudflare.com/auth/callback
+```
+
+Notas y trampas frecuentes:
+
+- El `*` casa cualquier cadena **sin separadores** (`.` y `/`), así que
+  `https://*.trycloudflare.com/...` casa `https://lo-que-sea.trycloudflare.com/...`
+  pero **no** un sub-subdominio con otro punto.
+- En **Google Cloud Console no se toca nada**: ahí la *Authorized redirect URI*
+  es `https://<ref>.supabase.co/auth/v1/callback`, que **no cambia** con el túnel.
+- El comodín de un dominio compartido (`*.trycloudflare.com`) es cómodo en
+  desarrollo pero **quítalo en producción**; deja solo el dominio real.
+- Los errores `WebSocket … _next/webpack-hmr … failed` en consola son el
+  hot-reload de Next que no atraviesa el túnel: **no afectan al login**, son ruido.
+- Para evitar el baile de URLs del todo: usa un *named tunnel* con dominio fijo,
+  o prueba OAuth en `http://localhost:3000` (añádelo también a la lista).
+
 Email/password y Google **conviven**: si el correo de Google coincide con uno ya
 registrado y verificado, Supabase puede **vincular** ambas identidades (es
 configurable; conviene probar el flujo y fijar la política).
@@ -116,17 +153,36 @@ configurable; conviene probar el flujo y fijar la política).
 
 - [x] **B.1 — Fundación** (sin credenciales): migraciones SQL, deps
   (`@supabase/ssr`), clientes, `proxy.ts`, `next.config`, `.env.example`.
-- [ ] **B.2 — Auth**: callback de Google, Server Actions de login/registro/
-  logout con **confirmación por email**, reemplazar `AuthContext` por la sesión
-  de Supabase, proteger rutas en `proxy.ts` + DAL.
-- [ ] **B.3 — Catálogo (lectura)**: tienda/colección/producto leen de Supabase
-  en el servidor (revertir el `CatalogContext` de cliente a server-first).
-  Ajustar `CURRENCY`/`formatPrice` a la **moneda local**.
-- [ ] **B.4 — Admin (escritura)**: CRUD de categorías/productos por Server
-  Actions con `requireAdmin()` + `revalidatePath`.
-- [ ] **B.5 — Storage**: subir imágenes reales al bucket; usar `next/image`.
-- [ ] **B.6 — Pedidos + pago**: crear `order` + `order_items` al pagar;
-  integrar **Mercado Pago** (preference + webhook); historial real.
+- [x] **B.2 — Auth**: `AuthContext` reescrito sobre Supabase (email/password +
+  Google), callback `/auth/callback`, confirmación por email, DAL servidor y
+  protección de `/cuenta` y `/admin` en `proxy.ts`.
+- [x] **B.3 — Catálogo (lectura)**: `CatalogContext` ahora lee de Supabase
+  (categorías + productos con imágenes/variantes embebidas). Moneda en **ARS**.
+  Nota: se mantuvo client-side (no server-first) para no romper carrito/admin;
+  optimizar a SSR/SEO queda como mejora futura.
+- [x] **B.4 — Admin (escritura)**: las mutaciones del `CatalogContext` escriben
+  en Supabase (insert/update/delete de categorías, productos, imágenes y
+  variantes), protegidas por **RLS** (`is_admin()`). _Alternativa futura: mover
+  a Server Actions con `requireAdmin()` + `revalidatePath`._
+- [x] **B.5 — Storage**: subida de imágenes desde el form del admin
+  (`lib/supabase/storage.ts`) y render con `next/image` (`ProductImageFrame`,
+  fallback a glifo). Requiere migración `0002_storage.sql` aplicada.
+- [~] **B.6 — Pedidos + pago**:
+  - [x] Pedidos reales en Supabase (`lib/supabase/orders.ts`); checkout, cuenta
+    y dashboard conectados. Invitado vía RLS (`0003_orders.sql`).
+  - [~] **Mercado Pago**: scaffolding listo y *gated* por env
+    (`/api/checkout` crea la preference, `/api/payments/webhook` marca pagado).
+    **Pendiente de activar y probar** con `MP_ACCESS_TOKEN` + `SUPABASE_SECRET_KEY`.
+
+### Activar Mercado Pago (cuando tengas credenciales)
+1. En `.env`: `NEXT_PUBLIC_MP_ENABLED=true`, `MP_ACCESS_TOKEN=...`,
+   `SUPABASE_SECRET_KEY=sb_secret_...`.
+2. En Mercado Pago: configurar la URL de notificaciones (webhook) apuntando a
+   `https://TU-DOMINIO/api/payments/webhook`.
+3. Flujo: el checkout crea el pedido `pending` → `/api/checkout` genera la
+   preference → redirige a MP → al aprobarse, el webhook marca el pedido `paid`.
+   (En dev sin dominio público, el webhook no llega; probar con la CLI/ngrok.)
+4. Antes de producción: validar la firma del webhook de MP.
 
 ## 8. Cómo arrancar (cuando tengas el proyecto)
 

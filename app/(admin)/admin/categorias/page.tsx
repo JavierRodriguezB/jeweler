@@ -14,8 +14,8 @@ export default function AdminCategorias() {
   >(null);
   const [error, setError] = useState<string | null>(null);
 
-  function handleDelete(id: string) {
-    const result = deleteCategory(id);
+  async function handleDelete(id: string) {
+    const result = await deleteCategory(id);
     setError(result.ok ? null : result.error);
   }
 
@@ -114,9 +114,10 @@ export default function AdminCategorias() {
         >
           <CategoryForm
             initial={modal.mode === "edit" ? modal.category : undefined}
-            onSave={(category) => {
-              upsertCategory(category);
-              setModal(null);
+            onSave={async (category) => {
+              const result = await upsertCategory(category);
+              if (result.ok) setModal(null);
+              else setError(result.error);
             }}
             onCancel={() => setModal(null)}
           />

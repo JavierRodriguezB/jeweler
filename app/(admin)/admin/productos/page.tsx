@@ -26,6 +26,7 @@ export default function AdminProductos() {
     { mode: "create" } | { mode: "edit"; product: Product } | null
   >(null);
   const [confirmDelete, setConfirmDelete] = useState<Product | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   return (
     <div>
@@ -49,6 +50,12 @@ export default function AdminProductos() {
       {categories.length === 0 && (
         <p className="mt-5 rounded-xl bg-gold-soft/20 px-4 py-3 text-sm text-ink/60">
           Crea una categoría antes de cargar productos.
+        </p>
+      )}
+
+      {error && (
+        <p className="mt-5 rounded-xl bg-rose/10 px-4 py-3 text-sm text-rose-deep">
+          {error}
         </p>
       )}
 
@@ -125,9 +132,15 @@ export default function AdminProductos() {
           <ProductForm
             initial={modal.mode === "edit" ? modal.product : undefined}
             categories={categories}
-            onSave={(product) => {
-              upsertProduct(product);
-              setModal(null);
+            onSave={async (product) => {
+              const result = await upsertProduct(product);
+              if (result.ok) {
+                setError(null);
+                setModal(null);
+              } else {
+                setError(result.error);
+                setModal(null);
+              }
             }}
             onCancel={() => setModal(null)}
           />
@@ -151,8 +164,9 @@ export default function AdminProductos() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                deleteProduct(confirmDelete.id);
+              onClick={async () => {
+                const result = await deleteProduct(confirmDelete.id);
+                if (!result.ok) setError(result.error);
                 setConfirmDelete(null);
               }}
               className="rounded-full bg-rose-deep px-6 py-2.5 text-sm tracking-wide text-white transition-colors hover:bg-rose"

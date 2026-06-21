@@ -58,8 +58,8 @@ export default function AdminLayout({
             </Link>
             <button
               type="button"
-              onClick={() => {
-                logout();
+              onClick={async () => {
+                await logout();
                 router.push("/");
               }}
               className="rounded-full border border-ink/12 px-4 py-2 tracking-wide text-ink/70 transition-colors hover:border-rose/50 hover:text-rose-deep"

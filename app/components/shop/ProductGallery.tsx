@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { ProductImage } from "../../lib/types";
-import JewelryGlyph, { type GlyphName } from "./JewelryGlyph";
+import { type GlyphName } from "./JewelryGlyph";
+import ProductImageFrame from "./ProductImageFrame";
 
 /**
  * Galería de producto: imagen principal + miniaturas (como en la maqueta de
@@ -39,11 +40,13 @@ export default function ProductGallery({
           frames[active % frames.length]
         } ring-1 ring-ink/5`}
       >
-        <JewelryGlyph
-          name={glyph}
-          className="h-40 w-40 text-rose/40 transition-transform duration-500"
+        <ProductImageFrame
+          url={current?.url}
+          alt={current?.alt ?? ""}
+          glyph={glyph}
+          sizes="(max-width: 1024px) 100vw, 50vw"
+          glyphClassName="h-40 w-40"
         />
-        <span className="sr-only">{current?.alt}</span>
       </div>
 
       {/* Miniaturas */}
@@ -66,7 +69,13 @@ export default function ProductGallery({
                     : "ring-1 ring-ink/5 hover:ring-rose/50"
                 }`}
               >
-                <JewelryGlyph name={glyph} className="h-10 w-10 text-rose/35" />
+                <ProductImageFrame
+                  url={image.url}
+                  alt={image.alt}
+                  glyph={glyph}
+                  sizes="120px"
+                  glyphClassName="h-10 w-10"
+                />
               </button>
             );
           })}

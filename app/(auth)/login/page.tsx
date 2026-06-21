@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../components/auth/AuthContext";
 import FormField from "../../components/auth/FormField";
+import GoogleButton from "../../components/auth/GoogleButton";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -12,15 +13,18 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
-  // Si ya hay sesión, no tiene sentido quedarse aquí.
   useEffect(() => {
     if (hydrated && isAuthenticated) router.replace("/cuenta");
   }, [hydrated, isAuthenticated, router]);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const result = login(email, password);
+    setError(null);
+    setPending(true);
+    const result = await login(email, password);
+    setPending(false);
     if (result.ok) router.push("/cuenta");
     else setError(result.error);
   }
@@ -35,7 +39,15 @@ export default function LoginPage() {
         </Link>
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+      <div className="mt-8">
+        <GoogleButton />
+      </div>
+
+      <div className="my-6 flex items-center gap-4 text-xs text-ink/40">
+        <span className="h-px flex-1 bg-ink/10" />o<span className="h-px flex-1 bg-ink/10" />
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-5">
         <FormField
           label="Correo"
           type="email"
@@ -57,23 +69,12 @@ export default function LoginPage() {
 
         <button
           type="submit"
-          className="w-full rounded-full bg-rose px-7 py-3.5 text-sm tracking-wide text-white transition-colors hover:bg-rose-deep"
+          disabled={pending}
+          className="w-full rounded-full bg-rose px-7 py-3.5 text-sm tracking-wide text-white transition-colors hover:bg-rose-deep disabled:opacity-60"
         >
-          Entrar
+          {pending ? "Entrando…" : "Entrar"}
         </button>
       </form>
-
-      <div className="mt-8 rounded-2xl border border-ink/8 bg-white/60 p-4 text-xs leading-relaxed text-ink/55">
-        <p className="font-medium text-ink/70">Cuentas de demostración</p>
-        <p className="mt-1.5">
-          Admin · <span className="text-ink/75">admin@cocolu.com</span> /{" "}
-          <span className="text-ink/75">cocolu-admin</span>
-        </p>
-        <p>
-          Cliente · <span className="text-ink/75">cliente@cocolu.com</span> /{" "}
-          <span className="text-ink/75">cocolu-cliente</span>
-        </p>
-      </div>
     </div>
   );
 }

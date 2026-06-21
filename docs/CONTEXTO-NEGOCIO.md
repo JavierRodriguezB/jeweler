@@ -82,7 +82,7 @@ Maqueta funcional de punta a punta (datos en `localStorage`, sin backend aún):
 - **Autenticación**: cuentas propias (email/contraseña) **y** Google.
 - **Verificación de correo**: sí (confirmar email al registrarse).
 - **Pagos**: Mercado Pago.
-- **Moneda**: local (⚠️ definir cuál exactamente: ARS/COP/PEN/MXN/…).
+- **Moneda**: peso argentino (**ARS**); formato `es-AR` en `app/lib/format.ts`.
 - **Envíos**: gratis (por ahora).
 
 ## Datos de prueba (mock)

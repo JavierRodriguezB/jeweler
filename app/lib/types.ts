@@ -170,7 +170,7 @@ export interface Order {
 // ──────────────────────────────── Constantes ────────────────────────────────
 
 /** Moneda del catálogo. */
-export const CURRENCY = "USD" as const;
+export const CURRENCY = "ARS" as const;
 
 /** Etiquetas legibles de cada temporada para la UI. */
 export const SEASON_LABELS: Record<Season, string> = {

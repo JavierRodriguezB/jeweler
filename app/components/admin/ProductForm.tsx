@@ -10,6 +10,7 @@ import type {
 } from "../../lib/types";
 import { SEASON_LABELS } from "../../lib/types";
 import { slugify } from "../../lib/slug";
+import { uploadProductImage } from "../../lib/supabase/storage";
 import FormField from "../auth/FormField";
 import {
   SelectField,
@@ -113,9 +114,22 @@ export default function ProductForm({
     })) ?? DEFAULT_DETAILS
   );
 
+  const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   function handleName(v: string) {
     setName(v);
     if (!slugTouched) setSlug(slugify(v));
+  }
+
+  async function handleUpload(index: number, file: File | null) {
+    if (!file) return;
+    setUploadError(null);
+    setUploadingIndex(index);
+    const result = await uploadProductImage(file);
+    setUploadingIndex(null);
+    if (result.ok) updateRow(setImages, index, { url: result.url });
+    else setUploadError(result.error);
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -221,7 +235,7 @@ export default function ProductForm({
       {/* Imágenes */}
       <Section
         title="Imágenes"
-        hint="Marca cuál es la principal. Usa rutas tipo /images/products/aurora-1.jpg"
+        hint="Sube la foto (se guarda en Storage) o pega una URL. Marca la principal."
         onAdd={() =>
           setImages((prev) => [
             ...prev,
@@ -230,25 +244,48 @@ export default function ProductForm({
         }
         addLabel="Agregar imagen"
       >
+        {uploadError && (
+          <p className="text-sm text-rose-deep">{uploadError}</p>
+        )}
         {images.map((im, i) => (
-          <div key={im.id} className="flex items-end gap-3">
-            <label className="flex items-center gap-1.5 pb-3 text-xs text-ink/60">
-              <input
-                type="radio"
-                name="primary-image"
-                checked={i === primaryIndex}
-                onChange={() => setPrimaryIndex(i)}
-                className="accent-rose"
-              />
-              Principal
-            </label>
-            <div className="flex-1">
-              <FormField label="URL" value={im.url} onChange={(v) => updateRow(setImages, i, { url: v })} required={false} placeholder="/images/products/..." />
+          <div key={im.id} className="rounded-xl border border-ink/8 bg-white/60 p-3">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-1.5 text-xs text-ink/60">
+                <input
+                  type="radio"
+                  name="primary-image"
+                  checked={i === primaryIndex}
+                  onChange={() => setPrimaryIndex(i)}
+                  className="accent-rose"
+                />
+                Imagen principal
+              </label>
+              <RemoveButton onClick={() => removeRow(setImages, i, setPrimaryIndex)} />
             </div>
-            <div className="flex-1">
+
+            <div className="mt-2 flex items-center gap-3">
+              {/* Vista previa */}
+              <span className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-ivory-soft ring-1 ring-ink/10">
+                {/^https?:\/\//.test(im.url) && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={im.url} alt="" className="h-full w-full object-cover" />
+                )}
+              </span>
+              <label className="cursor-pointer rounded-full border border-ink/12 px-4 py-2 text-xs tracking-wide text-ink/70 transition-colors hover:border-rose/50">
+                {uploadingIndex === i ? "Subiendo…" : "Subir foto"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleUpload(i, e.target.files?.[0] ?? null)}
+                />
+              </label>
+            </div>
+
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <FormField label="URL" value={im.url} onChange={(v) => updateRow(setImages, i, { url: v })} required={false} placeholder="https://…/storage/…" />
               <FormField label="Texto alt" value={im.alt} onChange={(v) => updateRow(setImages, i, { alt: v })} required={false} placeholder="Anillo de frente" />
             </div>
-            <RemoveButton onClick={() => removeRow(setImages, i, setPrimaryIndex)} />
           </div>
         ))}
       </Section>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCart } from "./CartContext";
 import { formatPrice } from "../../lib/format";
 import JewelryGlyph from "../shop/JewelryGlyph";
+import ProductImageFrame from "../shop/ProductImageFrame";
 
 /** Panel lateral del carrito. Se monta una vez en el layout del escaparate. */
 export default function CartDrawer() {
@@ -98,9 +99,18 @@ export default function CartDrawer() {
                   <Link
                     href={`/producto/${line.product.slug}`}
                     onClick={closeCart}
-                    className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[16px] bg-gradient-to-br from-ivory via-white to-ivory-soft text-rose/35 ring-1 ring-ink/5"
+                    className="relative h-20 w-20 shrink-0 overflow-hidden rounded-[16px] bg-gradient-to-br from-ivory via-white to-ivory-soft ring-1 ring-ink/5"
                   >
-                    <JewelryGlyph name={line.glyph} className="h-10 w-10" />
+                    <ProductImageFrame
+                      url={
+                        line.product.images.find((i) => i.isPrimary)?.url ??
+                        line.product.images[0]?.url
+                      }
+                      alt={line.product.name}
+                      glyph={line.glyph}
+                      sizes="80px"
+                      glyphClassName="h-10 w-10"
+                    />
                   </Link>
 
                   <div className="flex flex-1 flex-col">

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../components/auth/AuthContext";
-import { getOrdersForUser } from "../../components/account/ordersStore";
+import { getOrdersForUser } from "../../lib/supabase/orders";
 import { formatPrice } from "../../lib/format";
 import type { Order, OrderStatus } from "../../lib/types";
 
@@ -27,7 +27,7 @@ export default function CuentaPage() {
       router.replace("/login");
       return;
     }
-    setOrders(getOrdersForUser(user.id));
+    getOrdersForUser(user.id).then(setOrders);
   }, [hydrated, user, router]);
 
   if (!hydrated || !user) {
@@ -57,8 +57,8 @@ export default function CuentaPage() {
         </div>
         <button
           type="button"
-          onClick={() => {
-            logout();
+          onClick={async () => {
+            await logout();
             router.push("/");
           }}
           className="rounded-full border border-ink/12 px-5 py-2.5 text-sm tracking-wide text-ink/70 transition-colors hover:border-rose/50 hover:text-rose-deep"
@@ -109,7 +109,7 @@ export default function CuentaPage() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <span className="font-display text-lg text-ink">
-                      Pedido #{order.id.replace("ord_", "")}
+                      Pedido #{order.id.slice(0, 8)}
                     </span>
                     <p className="mt-0.5 text-xs text-ink/45">
                       {new Date(order.createdAt).toLocaleDateString("es", {

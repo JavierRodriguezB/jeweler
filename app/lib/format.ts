@@ -1,6 +1,6 @@
 import { CURRENCY } from "./types";
 
-const priceFormatter = new Intl.NumberFormat("en-US", {
+const priceFormatter = new Intl.NumberFormat("es-AR", {
   style: "currency",
   currency: CURRENCY,
   maximumFractionDigits: 0,

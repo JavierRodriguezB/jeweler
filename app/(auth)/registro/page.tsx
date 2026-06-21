@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../../components/auth/AuthContext";
 import FormField from "../../components/auth/FormField";
+import GoogleButton from "../../components/auth/GoogleButton";
 
 export default function RegistroPage() {
   const router = useRouter();
@@ -13,16 +14,50 @@ export default function RegistroPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [confirmSent, setConfirmSent] = useState(false);
 
   useEffect(() => {
     if (hydrated && isAuthenticated) router.replace("/cuenta");
   }, [hydrated, isAuthenticated, router]);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const result = register({ name, email, password });
-    if (result.ok) router.push("/cuenta");
-    else setError(result.error);
+    setError(null);
+    setPending(true);
+    const result = await register({ name, email, password });
+    setPending(false);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    if (result.needsConfirmation) setConfirmSent(true);
+    else router.push("/cuenta");
+  }
+
+  if (confirmSent) {
+    return (
+      <div className="text-center">
+        <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-rose/15 text-rose-deep">
+          <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.5}>
+            <path d="M4 6h16v12H4z" strokeLinejoin="round" />
+            <path d="M4 7l8 6 8-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+        <h1 className="mt-6 font-display text-3xl text-ink">Revisa tu correo</h1>
+        <p className="mt-3 text-sm text-ink/60">
+          Enviamos un enlace de confirmación a{" "}
+          <span className="text-ink">{email}</span>. Ábrelo para activar tu
+          cuenta e iniciar sesión.
+        </p>
+        <Link
+          href="/login"
+          className="mt-6 inline-block rounded-full border border-ink/12 px-6 py-3 text-sm tracking-wide text-ink/70 transition-colors hover:border-rose/50"
+        >
+          Ir a iniciar sesión
+        </Link>
+      </div>
+    );
   }
 
   return (
@@ -35,14 +70,16 @@ export default function RegistroPage() {
         </Link>
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-8 space-y-5">
-        <FormField
-          label="Nombre"
-          value={name}
-          onChange={setName}
-          autoComplete="name"
-          placeholder="Tu nombre"
-        />
+      <div className="mt-8">
+        <GoogleButton label="Registrarse con Google" />
+      </div>
+
+      <div className="my-6 flex items-center gap-4 text-xs text-ink/40">
+        <span className="h-px flex-1 bg-ink/10" />o<span className="h-px flex-1 bg-ink/10" />
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <FormField label="Nombre" value={name} onChange={setName} autoComplete="name" placeholder="Tu nombre" />
         <FormField
           label="Correo"
           type="email"
@@ -64,16 +101,12 @@ export default function RegistroPage() {
 
         <button
           type="submit"
-          className="w-full rounded-full bg-rose px-7 py-3.5 text-sm tracking-wide text-white transition-colors hover:bg-rose-deep"
+          disabled={pending}
+          className="w-full rounded-full bg-rose px-7 py-3.5 text-sm tracking-wide text-white transition-colors hover:bg-rose-deep disabled:opacity-60"
         >
-          Crear cuenta
+          {pending ? "Creando…" : "Crear cuenta"}
         </button>
       </form>
-
-      <p className="mt-6 text-xs leading-relaxed text-ink/45">
-        Al crear tu cuenta podrás ver tu historial de pedidos y completar la
-        compra más rápido.
-      </p>
     </div>
   );
 }

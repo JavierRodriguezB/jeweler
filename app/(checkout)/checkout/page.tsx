@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { useCart } from "../../components/cart/CartContext";
 import { useAuth } from "../../components/auth/AuthContext";
 import FormField from "../../components/auth/FormField";
-import { saveOrder } from "../../components/account/ordersStore";
+import { createOrder } from "../../lib/supabase/orders";
 import { formatPrice } from "../../lib/format";
 import type { Order } from "../../lib/types";
+
+const MP_ENABLED = process.env.NEXT_PUBLIC_MP_ENABLED === "true";
 
 const EMAIL_RE = /.+@.+\..+/;
 
@@ -31,15 +33,17 @@ export default function CheckoutPage() {
   const [phone, setPhone] = useState("");
 
   const [confirmed, setConfirmed] = useState<Order | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [orderError, setOrderError] = useState<string | null>(null);
 
   // Precarga el nombre cuando hay sesión.
   useEffect(() => {
     if (user && !name) setName(user.name);
   }, [user, name]);
 
-  function handleInlineLogin(e: React.FormEvent) {
+  async function handleInlineLogin(e: React.FormEvent) {
     e.preventDefault();
-    const result = login(loginEmail, loginPassword);
+    const result = await login(loginEmail, loginPassword);
     if (result.ok) setLoginError(null);
     else setLoginError(result.error);
   }
@@ -51,32 +55,67 @@ export default function CheckoutPage() {
     name.trim() && address.trim() && city.trim() && phone.trim();
   const canConfirm = identityReady && shippingReady;
 
-  function handleConfirm() {
-    if (!canConfirm) return;
+  async function handleConfirm() {
+    if (!canConfirm || submitting) return;
+    setSubmitting(true);
+    setOrderError(null);
+
     const email = isAuthenticated
       ? user!.email
       : guestEmail.trim().toLowerCase();
+    const items = lines.map((l) => ({
+      productId: l.productId,
+      name: l.product.name,
+      variantLabel: l.variantLabels.join(" · ") || undefined,
+      unitPrice: l.unitPrice,
+      quantity: l.quantity,
+    }));
+
+    // Con Mercado Pago el pedido nace "pending" y lo confirma el webhook;
+    // en modo simulado nace "paid".
+    const result = await createOrder({
+      userId: user?.id ?? null,
+      guestEmail: user ? null : email,
+      status: MP_ENABLED ? "pending" : "paid",
+      subtotal,
+      total: subtotal,
+      items,
+    });
+
+    if (!result.ok) {
+      setSubmitting(false);
+      setOrderError(result.error);
+      return;
+    }
+
+    if (MP_ENABLED) {
+      const res = await fetch("/api/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: result.id, items, payerEmail: email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (data.url) {
+        window.location.href = data.url; // a Mercado Pago
+        return;
+      }
+      // Si MP falla, mostramos el pedido como creado igualmente.
+    }
 
     const order: Order = {
-      id: `ord_${Date.now()}`,
+      id: result.id,
       userId: user?.id,
       guestEmail: user ? undefined : email,
-      status: "paid",
-      lines: lines.map((l) => ({
-        productId: l.productId,
-        name: l.product.name,
-        variantLabel: l.variantLabels.join(" · ") || undefined,
-        unitPrice: l.unitPrice,
-        quantity: l.quantity,
-      })),
+      status: MP_ENABLED ? "pending" : "paid",
+      lines: items,
       subtotal,
       total: subtotal,
       createdAt: new Date().toISOString(),
     };
 
-    saveOrder(order);
     clear();
     setConfirmed(order);
+    setSubmitting(false);
   }
 
   // ── Estados de pantalla ────────────────────────────────────────────────
@@ -216,11 +255,16 @@ export default function CheckoutPage() {
         <button
           type="button"
           onClick={handleConfirm}
-          disabled={!canConfirm}
+          disabled={!canConfirm || submitting}
           className="mt-10 w-full rounded-full bg-rose px-7 py-4 text-sm tracking-wide text-white transition-colors hover:bg-rose-deep disabled:cursor-not-allowed disabled:bg-ink/20"
         >
-          Confirmar pedido · {formatPrice(subtotal)}
+          {submitting
+            ? "Procesando…"
+            : `Confirmar pedido · ${formatPrice(subtotal)}`}
         </button>
+        {orderError && (
+          <p className="mt-3 text-center text-sm text-rose-deep">{orderError}</p>
+        )}
         {!identityReady && (
           <p className="mt-3 text-center text-xs text-ink/45">
             Inicia sesión o ingresa tu correo de invitado para continuar.
@@ -334,7 +378,7 @@ function Confirmation({
       </span>
       <h1 className="mt-6 font-display text-4xl text-ink">¡Gracias por tu compra!</h1>
       <p className="mt-3 text-sm text-ink/60">
-        Tu pedido <span className="text-ink">#{order.id.replace("ord_", "")}</span>{" "}
+        Tu pedido <span className="text-ink">#{order.id.slice(0, 8)}</span>{" "}
         fue confirmado. Enviamos la confirmación a{" "}
         <span className="text-ink">{isUser ? "tu correo" : order.guestEmail}</span>.
       </p>

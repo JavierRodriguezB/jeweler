@@ -1,7 +1,8 @@
 import Link from "next/link";
 import type { Category, Product } from "../../lib/types";
 import { formatPrice } from "../../lib/format";
-import JewelryGlyph, { glyphForCategory } from "./JewelryGlyph";
+import { glyphForCategory } from "./JewelryGlyph";
+import ProductImageFrame from "./ProductImageFrame";
 import Stars from "./Stars";
 
 /** Tarjeta de producto para grillas de catálogo. Enlaza a /producto/[slug]. */
@@ -13,6 +14,8 @@ export default function ProductCard({
   category?: Category;
 }) {
   const glyph = glyphForCategory(category?.slug ?? "");
+  const cover =
+    product.images.find((i) => i.isPrimary)?.url ?? product.images[0]?.url;
 
   return (
     <Link
@@ -20,10 +23,10 @@ export default function ProductCard({
       className="group flex flex-col focus-visible:outline-none"
     >
       <div className="relative aspect-square overflow-hidden rounded-[22px] bg-gradient-to-br from-ivory via-white to-ivory-soft ring-1 ring-ink/5 transition-shadow duration-300 group-hover:shadow-[0_28px_56px_-30px_rgba(168,100,95,0.45)] group-focus-visible:ring-2 group-focus-visible:ring-rose-deep">
-        {/* Imagen (placeholder con glifo mientras no haya foto real) */}
-        <span className="absolute inset-0 flex items-center justify-center text-rose/35 transition-transform duration-500 group-hover:scale-110">
-          <JewelryGlyph name={glyph} className="h-24 w-24" />
-        </span>
+        {/* Imagen real (Storage) o glifo de placeholder */}
+        <div className="absolute inset-0 transition-transform duration-500 group-hover:scale-105">
+          <ProductImageFrame url={cover} alt={product.name} glyph={glyph} />
+        </div>
 
         {/* Insignias */}
         <div className="absolute left-4 top-4 flex flex-col gap-2">

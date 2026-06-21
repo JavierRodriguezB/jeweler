@@ -8,119 +8,119 @@ import {
   useMemo,
   useState,
 } from "react";
-import type { User } from "../../lib/types";
-import { demoCredentials, getUserByEmail } from "../../lib/mock-data";
+import { createClient } from "../../lib/supabase/client";
+import type { UserRole } from "../../lib/types";
 
-const SESSION_KEY = "cocolu-session";
-const USERS_KEY = "cocolu-users";
+/** Datos de sesión que usa la UI. */
+export type SessionUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+};
 
-/** Datos de sesión (sin contraseña). */
-export type SessionUser = Pick<User, "id" | "name" | "email" | "role">;
-
-/** Usuario registrado en la maqueta (contraseña en claro: SOLO demo). */
-type StoredUser = SessionUser & { password: string };
-
-export type AuthResult = { ok: true } | { ok: false; error: string };
+export type AuthResult =
+  | { ok: true; needsConfirmation?: boolean }
+  | { ok: false; error: string };
 
 type AuthContextValue = {
   user: SessionUser | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
-  /** true cuando ya se leyó la sesión de localStorage (evita parpadeos). */
+  /** true cuando ya se resolvió el estado de sesión inicial. */
   hydrated: boolean;
-  login: (email: string, password: string) => AuthResult;
+  login: (email: string, password: string) => Promise<AuthResult>;
   register: (data: {
     name: string;
     email: string;
     password: string;
-  }) => AuthResult;
-  logout: () => void;
+  }) => Promise<AuthResult>;
+  logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function readStoredUsers(): StoredUser[] {
-  try {
-    const raw = localStorage.getItem(USERS_KEY);
-    return raw ? (JSON.parse(raw) as StoredUser[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeStoredUsers(users: StoredUser[]): void {
-  try {
-    localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  } catch {
-    /* almacenamiento no disponible */
-  }
-}
-
-function toSession(u: SessionUser): SessionUser {
-  return { id: u.id, name: u.name, email: u.email, role: u.role };
+/** Traduce los mensajes de error de Supabase a español. */
+function translateError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("invalid login")) return "Correo o contraseña incorrectos.";
+  if (m.includes("email not confirmed"))
+    return "Confirma tu correo antes de entrar.";
+  if (m.includes("already registered") || m.includes("already been registered"))
+    return "Ese correo ya está registrado.";
+  if (m.includes("password")) return "La contraseña no cumple los requisitos.";
+  return message;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [supabase] = useState(() => createClient());
   const [user, setUser] = useState<SessionUser | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(SESSION_KEY);
-      if (raw) setUser(JSON.parse(raw) as SessionUser);
-    } catch {
-      /* almacenamiento no disponible */
-    }
-    setHydrated(true);
-  }, []);
+  // Carga nombre + rol desde la tabla `profiles`.
+  const loadProfile = useCallback(
+    async (authUser: { id: string; email?: string; user_metadata?: Record<string, unknown> }) => {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("name, role")
+        .eq("id", authUser.id)
+        .single();
 
-  const persist = useCallback((session: SessionUser | null) => {
-    setUser(session);
-    try {
-      if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-      else localStorage.removeItem(SESSION_KEY);
-    } catch {
-      /* almacenamiento no disponible */
-    }
-  }, []);
+      setUser({
+        id: authUser.id,
+        email: authUser.email ?? "",
+        name:
+          profile?.name ??
+          (authUser.user_metadata?.name as string | undefined) ??
+          authUser.email?.split("@")[0] ??
+          "",
+        role: (profile?.role as UserRole) ?? "customer",
+      });
+    },
+    [supabase]
+  );
+
+  useEffect(() => {
+    // onAuthStateChange emite INITIAL_SESSION al suscribirse, así que cubre la
+    // hidratación inicial y los cambios posteriores (login/logout/refresh).
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Diferir consultas a Supabase fuera del callback (evita bloqueos).
+      if (session?.user) {
+        const authUser = session.user;
+        setTimeout(() => loadProfile(authUser), 0);
+      } else {
+        setUser(null);
+      }
+      setHydrated(true);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase, loadProfile]);
 
   const login = useCallback(
-    (email: string, password: string): AuthResult => {
-      const e = email.trim().toLowerCase();
-
-      // 1) Credenciales de demo (usuarios sembrados en el mock).
-      const demo = demoCredentials.find(
-        (d) => d.email === e && d.password === password
-      );
-      if (demo) {
-        const u = getUserByEmail(e);
-        if (u) {
-          persist(toSession(u));
-          return { ok: true };
-        }
-      }
-
-      // 2) Usuarios registrados en esta sesión del navegador.
-      const stored = readStoredUsers().find(
-        (u) => u.email.toLowerCase() === e && u.password === password
-      );
-      if (stored) {
-        persist(toSession(stored));
-        return { ok: true };
-      }
-
-      return { ok: false, error: "Correo o contraseña incorrectos." };
+    async (email: string, password: string): Promise<AuthResult> => {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      });
+      if (error) return { ok: false, error: translateError(error.message) };
+      return { ok: true };
     },
-    [persist]
+    [supabase]
   );
 
   const register = useCallback(
-    (data: { name: string; email: string; password: string }): AuthResult => {
+    async (data: {
+      name: string;
+      email: string;
+      password: string;
+    }): Promise<AuthResult> => {
       const name = data.name.trim();
-      const e = data.email.trim().toLowerCase();
-
+      const email = data.email.trim().toLowerCase();
       if (!name) return { ok: false, error: "Ingresa tu nombre." };
-      if (!/.+@.+\..+/.test(e))
+      if (!/.+@.+\..+/.test(email))
         return { ok: false, error: "Ingresa un correo válido." };
       if (data.password.length < 6)
         return {
@@ -128,30 +128,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           error: "La contraseña debe tener al menos 6 caracteres.",
         };
 
-      const exists =
-        Boolean(getUserByEmail(e)) ||
-        readStoredUsers().some((u) => u.email.toLowerCase() === e);
-      if (exists)
-        return { ok: false, error: "Ese correo ya está registrado." };
-
-      const newUser: StoredUser = {
-        id: `usr_${Date.now()}`,
-        name,
-        email: e,
-        role: "customer",
+      const { data: result, error } = await supabase.auth.signUp({
+        email,
         password: data.password,
-      };
-      const users = readStoredUsers();
-      users.push(newUser);
-      writeStoredUsers(users);
+        options: {
+          data: { name },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (error) return { ok: false, error: translateError(error.message) };
 
-      persist(toSession(newUser));
-      return { ok: true };
+      // Si hay confirmación por correo activada, no hay sesión todavía.
+      return { ok: true, needsConfirmation: !result.session };
     },
-    [persist]
+    [supabase]
   );
 
-  const logout = useCallback(() => persist(null), [persist]);
+  const logout = useCallback(async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  }, [supabase]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
