@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import Link from "next/link";
 import gsap from "gsap";
 
 export default function Hero() {
@@ -10,60 +11,65 @@ export default function Hero() {
     const root = rootRef.current;
     if (!root) return;
 
-    const ringPath = root.querySelector<SVGPathElement>("[data-ring-path]");
-    const ringLength = ringPath?.getTotalLength() ?? 0;
+    // Ámbito de GSAP: revert() en la limpieza restaura los estilos en línea
+    // originales, de modo que al re-montar el componente en una navegación del
+    // lado del cliente las animaciones `.from()` vuelven a leer el valor
+    // natural como destino (si no, leerían el valor inicial 0 y animarían 0→0,
+    // dejando el contenido invisible).
+    const ctx = gsap.context(() => {
+      const ringPath = root.querySelector<SVGPathElement>("[data-ring-path]");
+      const ringLength = ringPath?.getTotalLength() ?? 0;
 
-    const tl = gsap.timeline({
-      defaults: { ease: "power3.out" },
-    });
-
-    if (ringPath) {
-      gsap.set(ringPath, {
-        strokeDasharray: ringLength,
-        strokeDashoffset: ringLength,
+      const tl = gsap.timeline({
+        defaults: { ease: "power3.out" },
       });
-    }
 
-    tl.from(root.querySelectorAll("[data-nav-item]"), {
-      y: -16,
-      opacity: 0,
-      duration: 0.7,
-      stagger: 0.08,
-    })
-      .from(
-        root.querySelectorAll("[data-headline-word]"),
-        {
-          y: "100%",
-          opacity: 0,
-          duration: 0.9,
-          stagger: 0.12,
-        },
-        0.2
-      )
-      .from(
-        "[data-subtitle]",
-        { y: 16, opacity: 0, duration: 0.8 },
-        "-=0.5"
-      )
-      .from(
-        "[data-cta]",
-        { y: 16, opacity: 0, duration: 0.7 },
-        "-=0.55"
-      )
-      .to(
-        ringPath ?? [],
-        { strokeDashoffset: 0, duration: 1.6, ease: "power2.inOut" },
-        0.4
-      )
-      .from(
-        "[data-scroll-cue]",
-        { opacity: 0, duration: 0.8 },
-        "-=0.3"
-      );
+      if (ringPath) {
+        gsap.set(ringPath, {
+          strokeDasharray: ringLength,
+          strokeDashoffset: ringLength,
+        });
+      }
 
-    return () => {
-      tl.kill();
-    };
+      tl.from(root.querySelectorAll("[data-nav-item]"), {
+        y: -16,
+        opacity: 0,
+        duration: 0.7,
+        stagger: 0.08,
+      })
+        .from(
+          root.querySelectorAll("[data-headline-word]"),
+          {
+            y: "100%",
+            opacity: 0,
+            duration: 0.9,
+            stagger: 0.12,
+          },
+          0.2
+        )
+        .from(
+          "[data-subtitle]",
+          { y: 16, opacity: 0, duration: 0.8 },
+          "-=0.5"
+        )
+        .from(
+          "[data-cta]",
+          { y: 16, opacity: 0, duration: 0.7 },
+          "-=0.55"
+        )
+        .to(
+          ringPath ?? [],
+          { strokeDashoffset: 0, duration: 1.6, ease: "power2.inOut" },
+          0.4
+        )
+        .from(
+          "[data-scroll-cue]",
+          { opacity: 0, duration: 0.8 },
+          "-=0.3"
+        );
+    }, root);
+
+    return () => ctx.revert();
   }, []);
 
   return (
@@ -84,6 +90,9 @@ export default function Hero() {
           COCOLU
         </span>
         <nav className="hidden gap-10 text-sm tracking-wide text-ink/70 sm:flex">
+          <Link data-nav-item href="/tienda" className="transition-colors hover:text-rose-deep">
+            Tienda
+          </Link>
           <a data-nav-item href="#colecciones" className="transition-colors hover:text-rose-deep">
             Colecciones
           </a>
@@ -97,13 +106,13 @@ export default function Hero() {
             Contacto
           </a>
         </nav>
-        <a
+        <Link
           data-nav-item
-          href="#colecciones"
+          href="/cuenta"
           className="hidden text-sm tracking-wide text-ink/70 transition-colors hover:text-rose-deep sm:block"
         >
           Mi cuenta
-        </a>
+        </Link>
       </header>
 
       <main className="relative z-10 flex flex-1 items-center px-6 sm:px-10 lg:px-16">

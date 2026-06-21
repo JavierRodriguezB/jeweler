@@ -65,29 +65,31 @@ export default function Catalog() {
     const section = sectionRef.current;
     if (!section) return;
 
-    const tl = gsap.timeline({
-      scrollTrigger: {
-        trigger: section,
-        start: "top 75%",
-      },
-      defaults: { ease: "power3.out" },
-    });
+    // Ámbito de GSAP: revert() restaura los estilos en línea originales en la
+    // limpieza, para que las animaciones `.from()` se re-inicialicen bien al
+    // re-montar en navegaciones del lado del cliente (y mata su ScrollTrigger).
+    const ctx = gsap.context(() => {
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: section,
+          start: "top 75%",
+        },
+        defaults: { ease: "power3.out" },
+      });
 
-    tl.from(section.querySelectorAll("[data-reveal]"), {
-      y: 24,
-      opacity: 0,
-      duration: 0.7,
-      stagger: 0.08,
-    }).from(
-      cardRefs.current,
-      { y: 32, opacity: 0, duration: 0.7, stagger: 0.06 },
-      "-=0.4"
-    );
+      tl.from(section.querySelectorAll("[data-reveal]"), {
+        y: 24,
+        opacity: 0,
+        duration: 0.7,
+        stagger: 0.08,
+      }).from(
+        cardRefs.current,
+        { y: 32, opacity: 0, duration: 0.7, stagger: 0.06 },
+        "-=0.4"
+      );
+    }, section);
 
-    return () => {
-      tl.scrollTrigger?.kill();
-      tl.kill();
-    };
+    return () => ctx.revert();
   }, []);
 
   const handleSelect = (index: number) => {

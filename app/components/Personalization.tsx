@@ -72,55 +72,58 @@ export default function Personalization() {
     const section = sectionRef.current;
     if (!section) return;
 
-    const iconPaths = Array.from(
-      section.querySelectorAll<SVGGeometryElement>("[data-icon-path]")
-    );
-
-    iconPaths.forEach((path) => {
-      const length = path.getTotalLength();
-      gsap.set(path, { strokeDasharray: length, strokeDashoffset: length });
-    });
-
-    const revealEls = section.querySelectorAll("[data-reveal]");
-    const cardEls = section.querySelectorAll("[data-card]");
-
-    gsap.set(revealEls, { y: 24, opacity: 0 });
-    gsap.set(cardEls, { y: 32, opacity: 0 });
-
-    const tl = gsap.timeline({
-      scrollTrigger: {
-        trigger: section,
-        start: "top 75%",
-      },
-      defaults: { ease: "power3.out" },
-    });
-
-    tl.to(revealEls, {
-      y: 0,
-      opacity: 1,
-      duration: 0.7,
-      stagger: 0.08,
-    })
-      .to(
-        cardEls,
-        { y: 0, opacity: 1, duration: 0.7, stagger: 0.1 },
-        "-=0.4"
-      )
-      .to(
-        iconPaths,
-        {
-          strokeDashoffset: 0,
-          duration: 1,
-          ease: "power2.inOut",
-          stagger: 0.1,
-        },
-        "-=0.5"
+    // Ámbito de GSAP: revert() restaura los estilos en línea originales en la
+    // limpieza, para que los `gsap.set` que ocultan el contenido no queden
+    // congelados al re-montar en navegaciones del lado del cliente (y mata su
+    // ScrollTrigger).
+    const ctx = gsap.context(() => {
+      const iconPaths = Array.from(
+        section.querySelectorAll<SVGGeometryElement>("[data-icon-path]")
       );
 
-    return () => {
-      tl.scrollTrigger?.kill();
-      tl.kill();
-    };
+      iconPaths.forEach((path) => {
+        const length = path.getTotalLength();
+        gsap.set(path, { strokeDasharray: length, strokeDashoffset: length });
+      });
+
+      const revealEls = section.querySelectorAll("[data-reveal]");
+      const cardEls = section.querySelectorAll("[data-card]");
+
+      gsap.set(revealEls, { y: 24, opacity: 0 });
+      gsap.set(cardEls, { y: 32, opacity: 0 });
+
+      const tl = gsap.timeline({
+        scrollTrigger: {
+          trigger: section,
+          start: "top 75%",
+        },
+        defaults: { ease: "power3.out" },
+      });
+
+      tl.to(revealEls, {
+        y: 0,
+        opacity: 1,
+        duration: 0.7,
+        stagger: 0.08,
+      })
+        .to(
+          cardEls,
+          { y: 0, opacity: 1, duration: 0.7, stagger: 0.1 },
+          "-=0.4"
+        )
+        .to(
+          iconPaths,
+          {
+            strokeDashoffset: 0,
+            duration: 1,
+            ease: "power2.inOut",
+            stagger: 0.1,
+          },
+          "-=0.5"
+        );
+    }, section);
+
+    return () => ctx.revert();
   }, []);
 
   return (

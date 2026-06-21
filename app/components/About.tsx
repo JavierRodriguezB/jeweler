@@ -43,31 +43,34 @@ export default function About() {
     const section = sectionRef.current;
     if (!section) return;
 
-    const revealEls = section.querySelectorAll("[data-reveal]");
-    const statEls = section.querySelectorAll("[data-stat]");
-    const galleryEls = section.querySelectorAll("[data-gallery]");
+    // Ámbito de GSAP: revert() restaura los estilos en línea originales en la
+    // limpieza, para que los `gsap.set` que ocultan el contenido no queden
+    // congelados al re-montar en navegaciones del lado del cliente (y mata su
+    // ScrollTrigger).
+    const ctx = gsap.context(() => {
+      const revealEls = section.querySelectorAll("[data-reveal]");
+      const statEls = section.querySelectorAll("[data-stat]");
+      const galleryEls = section.querySelectorAll("[data-gallery]");
 
-    gsap.set(revealEls, { y: 24, opacity: 0 });
-    gsap.set(statEls, { y: 24, opacity: 0 });
-    gsap.set(galleryEls, { y: 32, opacity: 0 });
+      gsap.set(revealEls, { y: 24, opacity: 0 });
+      gsap.set(statEls, { y: 24, opacity: 0 });
+      gsap.set(galleryEls, { y: 32, opacity: 0 });
 
-    const tl = gsap.timeline({
-      scrollTrigger: { trigger: section, start: "top 75%" },
-      defaults: { ease: "power3.out" },
-    });
+      const tl = gsap.timeline({
+        scrollTrigger: { trigger: section, start: "top 75%" },
+        defaults: { ease: "power3.out" },
+      });
 
-    tl.to(revealEls, { y: 0, opacity: 1, duration: 0.7, stagger: 0.1 })
-      .to(statEls, { y: 0, opacity: 1, duration: 0.6, stagger: 0.1 }, "-=0.3")
-      .to(
-        galleryEls,
-        { y: 0, opacity: 1, duration: 0.7, stagger: 0.1 },
-        "-=0.3"
-      );
+      tl.to(revealEls, { y: 0, opacity: 1, duration: 0.7, stagger: 0.1 })
+        .to(statEls, { y: 0, opacity: 1, duration: 0.6, stagger: 0.1 }, "-=0.3")
+        .to(
+          galleryEls,
+          { y: 0, opacity: 1, duration: 0.7, stagger: 0.1 },
+          "-=0.3"
+        );
+    }, section);
 
-    return () => {
-      tl.scrollTrigger?.kill();
-      tl.kill();
-    };
+    return () => ctx.revert();
   }, []);
 
   return (

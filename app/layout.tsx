@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
 import SmoothScroll from "./components/SmoothScroll";
+import { CartProvider } from "./components/cart/CartContext";
+import { AuthProvider } from "./components/auth/AuthContext";
+import { CatalogProvider } from "./components/catalog/CatalogContext";
 
 const playfair = Playfair_Display({
   variable: "--font-display",
@@ -30,7 +33,13 @@ export default function RootLayout({
       className={`${playfair.variable} ${inter.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-ivory text-ink">
-        <SmoothScroll>{children}</SmoothScroll>
+        <SmoothScroll>
+          <CatalogProvider>
+            <AuthProvider>
+              <CartProvider>{children}</CartProvider>
+            </AuthProvider>
+          </CatalogProvider>
+        </SmoothScroll>
       </body>
     </html>
   );
