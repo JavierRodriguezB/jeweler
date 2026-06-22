@@ -1,5 +1,5 @@
 /**
- * Modelo de datos de COCOLU (maqueta de e-commerce reutilizable).
+ *  de datos de COCOLU (maqueta de e-commerce reutilizable).
  *
  * Convención: nombres de tipos/campos en inglés, contenido y comentarios en
  * español, igual que el resto del proyecto. Los precios se expresan en la
