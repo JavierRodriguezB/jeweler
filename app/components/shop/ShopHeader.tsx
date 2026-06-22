@@ -1,6 +1,7 @@
 import Link from "next/link";
 import CartButton from "../cart/CartButton";
 import AccountButton from "../auth/AccountButton";
+import { config } from "../../lib/config";
 
 const links = [
   { label: "Tienda", href: "/tienda" },
@@ -18,7 +19,7 @@ export default function ShopHeader() {
           href="/"
           className="font-display text-xl tracking-[0.18em] text-ink transition-colors hover:text-rose-deep"
         >
-          COCOLU
+          {config.site.name}
         </Link>
 
         <nav className="hidden gap-9 text-sm tracking-wide text-ink/70 sm:flex">

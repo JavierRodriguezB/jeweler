@@ -7,6 +7,8 @@
  * al conectar un backend real conviene migrar a enteros (céntimos).
  */
 
+import { config } from "./config";
+
 // ───────────────────────────── Roles y usuarios ─────────────────────────────
 
 /** Roles del sistema. `guest` = visitante sin sesión (no se persiste). */
@@ -169,8 +171,8 @@ export interface Order {
 
 // ──────────────────────────────── Constantes ────────────────────────────────
 
-/** Moneda del catálogo. */
-export const CURRENCY = "ARS" as const;
+/** Moneda del catálogo. Fuente única: `config.currency.code` (ver `lib/config`). */
+export const CURRENCY = config.currency.code;
 
 /** Etiquetas legibles de cada temporada para la UI. */
 export const SEASON_LABELS: Record<Season, string> = {

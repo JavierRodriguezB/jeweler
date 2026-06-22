@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../components/auth/AuthContext";
+import { config } from "../lib/config";
 
 const tabs = [
   { href: "/admin", label: "Resumen" },
@@ -43,7 +44,7 @@ export default function AdminLayout({
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4 sm:px-10">
           <div className="flex items-center gap-3">
             <Link href="/" className="font-display text-xl tracking-[0.18em] text-ink">
-              COCOLU
+              {config.site.name}
             </Link>
             <span className="rounded-full bg-ink/5 px-2.5 py-0.5 text-xs tracking-wide text-ink/55">
               Admin

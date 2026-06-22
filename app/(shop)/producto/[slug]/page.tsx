@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getAllProducts, getProductBySlug } from "@/app/lib/mock-data";
 import ProductoContent from "@/app/components/shop/ProductoContent";
+import { config } from "@/app/lib/config";
 
 /** Pre-genera una ruta por producto sembrado (los nuevos se sirven en runtime). */
 export function generateStaticParams() {
@@ -14,9 +15,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const product = getProductBySlug(slug);
-  if (!product) return { title: "Producto — COCOLU" };
+  if (!product) return { title: `Producto — ${config.site.name}` };
   return {
-    title: `${product.name} — COCOLU`,
+    title: `${product.name} — ${config.site.name}`,
     description: product.description,
   };
 }

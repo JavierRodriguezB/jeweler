@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
+import { config } from "@/app/lib/config";
 
 /**
  * Crea una preferencia de pago en Mercado Pago y devuelve la URL de checkout.
  * Si no hay `MP_ACCESS_TOKEN`, responde `{ simulated: true }` y el front sigue
  * con el flujo de pago simulado.
  *
- * NOTA: sin probar en vivo hasta tener credenciales de MP. La moneda es ARS.
+ * Moneda y rutas de retorno salen de `lib/config` (centralizado).
  */
 type CheckoutItem = {
   name: string;
@@ -29,14 +30,14 @@ export async function POST(request: Request) {
       title: it.name,
       quantity: it.quantity,
       unit_price: Number(it.unitPrice),
-      currency_id: "ARS",
+      currency_id: config.currency.code,
     })),
     external_reference: orderId,
     payer: payerEmail ? { email: payerEmail } : undefined,
     back_urls: {
-      success: `${origin}/cuenta`,
-      pending: `${origin}/cuenta`,
-      failure: `${origin}/checkout`,
+      success: `${origin}${config.payments.returnPaths.success}`,
+      pending: `${origin}${config.payments.returnPaths.pending}`,
+      failure: `${origin}${config.payments.returnPaths.failure}`,
     },
     auto_return: "approved",
     notification_url: `${origin}/api/payments/webhook`,

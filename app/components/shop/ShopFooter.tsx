@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { config } from "../../lib/config";
 
 /** Pie del escaparate. */
 export default function ShopFooter() {
@@ -10,7 +11,7 @@ export default function ShopFooter() {
       <div className="mx-auto grid max-w-7xl gap-10 px-6 py-16 sm:px-10 sm:grid-cols-3 lg:px-16">
         <div>
           <span className="font-display text-xl tracking-[0.18em] text-ink">
-            COCOLU
+            {config.site.name}
           </span>
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-ink/55">
             Joyería de alta manufactura. Piezas talladas a mano para acompañar
@@ -60,7 +61,7 @@ export default function ShopFooter() {
 
       <div className="border-t border-ink/8">
         <p className="mx-auto max-w-7xl px-6 py-6 text-xs text-ink/40 sm:px-10 lg:px-16">
-          © {new Date().getFullYear()} COCOLU. Todos los derechos reservados.
+          © {new Date().getFullYear()} {config.site.name}. Todos los derechos reservados.
         </p>
       </div>
     </footer>

@@ -5,6 +5,7 @@ import SmoothScroll from "./components/SmoothScroll";
 import { CartProvider } from "./components/cart/CartContext";
 import { AuthProvider } from "./components/auth/AuthContext";
 import { CatalogProvider } from "./components/catalog/CatalogContext";
+import { config } from "./lib/config";
 
 const playfair = Playfair_Display({
   variable: "--font-display",
@@ -18,8 +19,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "COCOLU — Joyería de Alta Manufactura",
-  description: "Piezas únicas, talladas a mano. Una experiencia de joyería premium.",
+  title: `${config.site.name} — ${config.site.tagline}`,
+  description: config.site.description,
 };
 
 export default function RootLayout({

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { config } from "../lib/config";
 
 /** Layout minimalista para el checkout: sin nav ni distracciones. */
 export default function CheckoutLayout({
@@ -13,7 +14,7 @@ export default function CheckoutLayout({
           href="/"
           className="font-display text-xl tracking-[0.18em] text-ink transition-colors hover:text-rose-deep"
         >
-          COCOLU
+          {config.site.name}
         </Link>
         <span className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-ink/45">
           <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5}>

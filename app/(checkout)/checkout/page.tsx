@@ -8,9 +8,10 @@ import { useAuth } from "../../components/auth/AuthContext";
 import FormField from "../../components/auth/FormField";
 import { createOrder } from "../../lib/supabase/orders";
 import { formatPrice } from "../../lib/format";
+import { config } from "../../lib/config";
 import type { Order } from "../../lib/types";
 
-const MP_ENABLED = process.env.NEXT_PUBLIC_MP_ENABLED === "true";
+const MP_ENABLED = config.payments.mpEnabled;
 
 const EMAIL_RE = /.+@.+\..+/;
 

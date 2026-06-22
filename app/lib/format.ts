@@ -1,8 +1,8 @@
-import { CURRENCY } from "./types";
+import { config } from "./config";
 
-const priceFormatter = new Intl.NumberFormat("es-AR", {
+const priceFormatter = new Intl.NumberFormat(config.currency.locale, {
   style: "currency",
-  currency: CURRENCY,
+  currency: config.currency.code,
   maximumFractionDigits: 0,
 });
 

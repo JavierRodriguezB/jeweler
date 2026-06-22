@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getAllCategories, getCategoryBySlug } from "@/app/lib/mock-data";
 import ColeccionContent from "@/app/components/shop/ColeccionContent";
+import { config } from "@/app/lib/config";
 
 /** Pre-genera una ruta por categoría sembrada (las nuevas se sirven en runtime). */
 export function generateStaticParams() {
@@ -14,9 +15,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const category = getCategoryBySlug(slug);
-  if (!category) return { title: "Colección — COCOLU" };
+  if (!category) return { title: `Colección — ${config.site.name}` };
   return {
-    title: `${category.name} — COCOLU`,
+    title: `${category.name} — ${config.site.name}`,
     description: category.description,
   };
 }
